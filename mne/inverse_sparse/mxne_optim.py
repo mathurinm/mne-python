@@ -128,7 +128,7 @@ def prox_l1(Y, alpha, n_orient):
     return Y, active_set
 
 
-def dgap_l21(M, G, X, active_set, alpha, n_orient):
+def dgap_l21(M, G, X, active_set, alpha, n_orient, return_scaling=False):
     """Duality gaps for the mixed norm inverse problem.
 
     For details see:
@@ -151,6 +151,8 @@ def dgap_l21(M, G, X, active_set, alpha, n_orient):
         Regularization parameter
     n_orient : int
         Number of dipoles per locations (typically 1 or 3)
+    return_scaling : bool
+        Return scaling factor making residuals feasible.
 
     Returns
     -------
@@ -162,6 +164,8 @@ def dgap_l21(M, G, X, active_set, alpha, n_orient):
         Dual cost. gap = p_obj - d_obj
     R : array, shape (n_sensors, n_times)
         Current residual of M - G * X
+    scaling : float
+        Scaling factor making R feasible. returned if return_scaling is True.
     """
     GX = np.dot(G[:, active_set], X)
     R = M - GX
@@ -173,7 +177,10 @@ def dgap_l21(M, G, X, active_set, alpha, n_orient):
     scaling = min(scaling, 1.0)
     d_obj = (scaling - 0.5 * (scaling ** 2)) * nR2 + scaling * np.sum(R * GX)
     gap = p_obj - d_obj
-    return gap, p_obj, d_obj, R
+    if return_scaling:
+        return gap, p_obj, d_obj, R, scaling
+    else:
+        return gap, p_obj, d_obj, R
 
 
 @verbose
@@ -328,6 +335,116 @@ def _mixed_norm_solver_bcd(M, G, alpha, lipschitz_constant, maxit=200,
     X = X[active_set]
 
     return X, active_set, E
+
+
+@verbose
+def _mixed_norm_solver_greedy_bcd(M, G, alpha, lipschitz_constant, GtM, init,
+                                  n_orient,
+                                  tol=1e-8, batch_size=10, max_updates=10 ** 4,
+                                  gap_spacing=1000, strategy='cyclic'):
+    """Inner solver with greedy CD. To be used on small working sets."""
+    highest_d_obj = - np.inf
+    n_sensors, n_times = M.shape
+    n_sources = G.shape[1]
+    n_pos = n_sources // n_orient
+    if batch_size is None:
+        batch_size = n_pos
+    nb_batch = int(np.ceil(n_pos / batch_size))
+
+    X = init.copy()
+    gram = np.dot(G.T, G)
+    gradients = np.dot(gram, X) - GtM
+
+    alpha_lc = alpha / lipschitz_constant
+
+    for n_updates in range(max_updates):
+        if strategy == 'cyclic':
+            j = n_updates % n_pos
+
+            idx = slice(j * n_orient, (j + 1) * n_orient)
+            X_j = X[idx]
+            grad_j = gradients[idx]
+            X_j_new = - grad_j / lipschitz_constant[j]
+
+            was_non_zero = X_j.any()
+            if was_non_zero:
+                X_j_new += X_j
+
+            block_norm = np.linalg.norm(X_j_new, ord='fro')
+            if block_norm <= alpha_lc[j]:
+                X_j_new = np.zeros_like(X_j)
+            else:
+                shrink = 1. - alpha_lc[j] / block_norm
+                X_j_new *= shrink
+
+            if was_non_zero:
+                gradients += np.dot(gram[:, idx], X_j_new - X_j)
+            else:
+                # avoid useless 0 to 0 update:
+                if X_j_new.any():
+                    gradients += np.dot(gram[:, idx], X_j_new)
+            X[idx] = X_j_new
+
+        elif strategy == 'greedy':
+            start = (n_updates % nb_batch) * batch_size
+            stop = min(start + batch_size, n_pos)
+
+            # choose best update in batch:
+            for j in range(start, stop):
+                idx = slice(j * n_orient, (j + 1) * n_orient)
+
+                X_j = X[idx]
+                grad_j = gradients[idx]
+                X_j_new = - grad_j / lipschitz_constant[j]
+
+                was_non_zero = X_j.any()
+
+                if was_non_zero:
+                    X_j_new += X_j
+
+                block_norm = linalg.norm(X_j_new, ord='fro')
+                if block_norm <= alpha_lc[j]:
+                    X_j_new = np.zeros_like(X_j)
+                    is_non_zero = False
+                else:
+                    shrink = 1. - alpha_lc[j] / block_norm
+                    X_j_new *= shrink
+                    is_non_zero = True
+
+                if was_non_zero:
+                    update = np.linalg.norm(X_j_new - X_j, ord='fro')
+                else:
+                    if is_non_zero:
+                        update = shrink * block_norm
+                    else:
+                        update = 0.
+
+                # j == start is to ensure we set best_idx and best_abs_update
+                if j == start or update > best_abs_update:
+                    best_abs_update = update
+                    best_idx = idx
+                    X_best_old = X_j.copy()
+                    X_best_new = X_j_new.copy()
+
+            gradients += np.dot(gram[:, best_idx], X_best_new - X_best_old)
+            X[best_idx] = X_best_new
+        else:
+            raise ValueError("Strategy %d not implemented" % strategy)
+
+        if n_updates % gap_spacing == 1:
+            a_set = (X != 0.).any(axis=1)
+            _, pobj, dobj, _ = dgap_l21(M, G, X[a_set], a_set,
+                                        alpha, 3)
+            highest_d_obj = max(highest_d_obj, dobj)
+            gap = pobj - highest_d_obj
+
+            print("inner gap %f" % gap)
+            if gap < tol:
+                print("inner gap smaller than %f, early exit" % tol)
+                break
+
+    return X
+
 
 
 @verbose
@@ -502,6 +619,133 @@ def mixed_norm_solver(M, G, alpha, maxit=3000, tol=1e-8, verbose=None,
         return X, active_set, E, gap
     else:
         return X, active_set, E
+
+
+@verbose
+def mixed_norm_solver_a5g(M, G, alpha, maxit=3000, tol=1e-8,
+                          inner_tol_ratio=0.3, min_working_set_size=50,
+                          max_updates=50000, strategy='cyclic',
+                          batch_size=10, n_orient=1, return_gap=False):
+    """Solve L1/L2 mixed-norm inverse problem with working set strategy.
+
+    Subproblems are solved with greedy coordinate descent (CD) and Gram matrix.
+    Beware of the difference between active set (set of sources whose activity
+    is non zero) and working set (set of sources forming a subproblem).
+
+    The algorithm is detailed in:
+    From safe screening rules to working sets for faster Lasso-type solvers
+    M. Massias, A. Gramfort, J. Salmon, 2017.
+    https://arxiv.org/abs/1703.07285
+
+    Parameters
+    ----------
+    M : array, shape (n_sensors, n_times)
+        The data.
+    G : array, shape (n_sensors, n_sources)
+        The gain matrix a.k.a. lead field.
+    alpha : float
+        The regularization parameter. It should be between 0 and 100.
+        A value of 100 will lead to no active source.
+    maxit : int
+        The maximum number of iterations.
+    tol : float
+        Tolerance on duality gap for convergence checking.
+    inner_tol_ratio : float
+        The fraction of current duality gap up to which the subproblems are
+        solved. It should be between 0 and 1. Is denoted underbar{epsilon}
+        in the paper notation.
+    min_working_set_size : int
+        The minimum number of positions included in the working sets.
+    max_updates : int
+        The maximum number of updates performed on each subproblem.
+    strategy : 'cyclic' | 'greedy' | 'greedy-batch'
+        The strategy used to perform coordinate selection for CD.
+    batch_size : int
+        The batch size when greedy CD is performed on batch of sources.
+    n_orient : int
+        The number of orientations (1 : fixed or 3 : free or loose).
+    return_gap : bool
+        Return final duality gap.
+
+    Returns
+    -------
+    X : array, shape (n_active, n_times)
+        The source estimates.
+    active_set : array, shape (n_sources,)
+        The mask of active sources.
+    E : list
+        The value of the objective function over the iterations.
+    gap : float
+        The final duality gap, returned only if return_gap is True.
+    """
+    # make G fortran for faster access to block of columns.
+    G = np.asfortranarray(G)
+
+    if strategy not in ('cyclic', 'greedy', 'greedy-batch'):
+        raise ValueError("strategy must be one of 'cyclic', 'greedy' \
+                         or 'greedy-batch', got %s" % strategy)
+
+    n_sensors, n_times = M.shape
+    n_sources = G.shape[1]
+    n_positions = n_sources // n_orient
+    X = np.zeros((n_sources, n_times))
+    GtM = np.dot(G.T, M)
+    # alpha_max = norm_l2inf(GtM, n_orient, copy=False)
+    alpha = float(alpha)
+
+    E = []
+    highest_d_obj = - np.inf
+    if n_orient == 1:
+        lc = np.sum(G ** 2, axis=0)
+    else:
+        lc = np.empty(n_sources)
+        for g in range(n_sources):
+            G_g = G[:, n_orient * g: n_orient * (g + 1)]
+            lc[g] = np.linalg.norm(
+                np.dot(G_g.T, G_g), ord=2)
+
+    for k in range(maxit):
+        active_set = (X.reshape(n_positions, -1) != 0).any(axis=1)
+        _, p_obj, d_obj, R, scaling = dgap_l21(M, G, X[active_set], active_set,
+                                               alpha, n_orient, return_scaling=True)
+        E.append(p_obj)
+        highest_d_obj = max(d_obj, highest_d_obj)
+        gap = p_obj - highest_d_obj
+        if gap < tol:
+            logger.info('Convergence reached ! (gap: %s < %s)' % (gap, tol))
+            break
+
+        # define working set using scaling * R as dual feasible point
+        priorities = (1. - scaling * groups_norm2(np.dot(G.T, R), n_orient)) / lc
+        priorities[active_pos] = - 1.
+
+        ws_size = min(max(2 * len(active_set), min_working_set_size),
+                      n_positions)
+        ws_pos = np.argpartition(priorities, ws_size)
+        ws_pos.sort()
+        if n_orient == 1:
+            ws_sources = ws_pos
+        else:
+            ws_sources = (n_orient * ws_pos[:, None] +
+                          np.arange(n_orient)[None, :]).ravel()
+
+        tol_inner = inner_tol_ratio * gap
+        # solve problem restricted to working set
+        X_, R = _mixed_norm_solver_greedy_bcd(M, G[:, ws_sources], alpha,
+                                              lc[ws_sources],
+                                              GtM[ws_sources],
+                                              init=X[ws_sources],
+                                              max_updates=max_updates,
+                                              tol=tol_inner,
+                                              strategy=strategy,
+                                              batch_size=batch_size)
+        X[ws_sources] = X_
+        active_pos = (X != 0).any(axis=1)
+
+    if return_gap:
+        return X[active_set], active_set, E, gap
+    else:
+        return X[active_set], active_set, E
 
 
 @verbose
