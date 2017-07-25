@@ -431,20 +431,27 @@ def _mixed_norm_solver_greedy_bcd(M, G, alpha, lipschitz_constant, GtM, init,
         else:
             raise ValueError("Strategy %d not implemented" % strategy)
 
-        if n_updates % gap_spacing == 1:
+        if (n_updates + 1) % gap_spacing == 0:
             a_set = (X != 0.).any(axis=1)
-            _, pobj, dobj, _ = dgap_l21(M, G, X[a_set], a_set,
-                                        alpha, 3)
+            _, pobj, dobj, R = dgap_l21(M, G, X[a_set], a_set,
+                                        alpha, n_orient)
             highest_d_obj = max(highest_d_obj, dobj)
             gap = pobj - highest_d_obj
 
-            print("inner gap %f" % gap)
+            print("Update %d, inner gap %f" % (n_updates, gap))
             if gap < tol:
                 print("inner gap smaller than %f, early exit" % tol)
                 break
+    # return correct residuals and gap if early exit was not triggered
+    else:
+        a_set = (X != 0.).any(axis=1)
+        _, pobj, dobj, R = dgap_l21(M, G, X[a_set], a_set,
+                                    alpha, n_orient)
+        highest_d_obj = max(highest_d_obj, dobj)
+        gap = pobj - highest_d_obj
+        print("Exit after %d updates, gap: %f" % (n_updates, gap))
 
-    return X
-
+    return X, R
 
 
 @verbose
@@ -705,9 +712,12 @@ def mixed_norm_solver_a5g(M, G, alpha, maxit=3000, tol=1e-8,
                 np.dot(G_g.T, G_g), ord=2)
 
     for k in range(maxit):
-        active_set = (X.reshape(n_positions, -1) != 0).any(axis=1)
-        _, p_obj, d_obj, R, scaling = dgap_l21(M, G, X[active_set], active_set,
-                                               alpha, n_orient, return_scaling=True)
+        active_pos = (X.reshape(n_positions, -1) != 0).any(axis=1)
+        active_sources = (X != 0).any(axis=1)
+
+        _, p_obj, d_obj, R, scaling = dgap_l21(M, G, X[active_sources],
+                                               active_sources, alpha, n_orient,
+                                               return_scaling=True)
         E.append(p_obj)
         highest_d_obj = max(d_obj, highest_d_obj)
         gap = p_obj - highest_d_obj
@@ -719,9 +729,9 @@ def mixed_norm_solver_a5g(M, G, alpha, maxit=3000, tol=1e-8,
         priorities = (1. - scaling * groups_norm2(np.dot(G.T, R), n_orient)) / lc
         priorities[active_pos] = - 1.
 
-        ws_size = min(max(2 * len(active_set), min_working_set_size),
+        ws_size = min(max(2 * active_pos.sum(), min_working_set_size),
                       n_positions)
-        ws_pos = np.argpartition(priorities, ws_size)
+        ws_pos = np.argpartition(priorities, ws_size - 1)  # TODO double check argpartition
         ws_pos.sort()
         if n_orient == 1:
             ws_sources = ws_pos
@@ -731,21 +741,24 @@ def mixed_norm_solver_a5g(M, G, alpha, maxit=3000, tol=1e-8,
 
         tol_inner = inner_tol_ratio * gap
         # solve problem restricted to working set
+        print("Iteration %d, solving subproblem with %d positions" % (k, ws_size))
         X_, R = _mixed_norm_solver_greedy_bcd(M, G[:, ws_sources], alpha,
                                               lc[ws_sources],
                                               GtM[ws_sources],
                                               init=X[ws_sources],
+                                              n_orient=n_orient,
                                               max_updates=max_updates,
                                               tol=tol_inner,
                                               strategy=strategy,
                                               batch_size=batch_size)
         X[ws_sources] = X_
-        active_pos = (X != 0).any(axis=1)
+
+    active_sources = (X != 0).any(axis=1)
 
     if return_gap:
-        return X[active_set], active_set, E, gap
+        return X[active_sources], active_sources, E, gap
     else:
-        return X[active_set], active_set, E
+        return X[active_sources], active_sources, E
 
 
 @verbose
