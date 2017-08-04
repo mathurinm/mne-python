@@ -337,7 +337,7 @@ def _mixed_norm_solver_bcd(M, G, alpha, lipschitz_constant, maxit=200,
     return X, active_set, E
 
 
-@verbose
+# @verbose
 def _mixed_norm_solver_greedy_bcd(M, G, alpha, lipschitz_constant, GtM, init,
                                   n_orient,
                                   tol=1e-8, batch_size=10, max_updates=10 ** 4,
@@ -354,7 +354,6 @@ def _mixed_norm_solver_greedy_bcd(M, G, alpha, lipschitz_constant, GtM, init,
     X = init.copy()
     gram = np.dot(G.T, G)
     gradients = np.dot(gram, X) - GtM
-
     alpha_lc = alpha / lipschitz_constant
 
     for n_updates in range(max_updates):
@@ -449,7 +448,8 @@ def _mixed_norm_solver_greedy_bcd(M, G, alpha, lipschitz_constant, GtM, init,
                                     alpha, n_orient)
         highest_d_obj = max(highest_d_obj, dobj)
         gap = pobj - highest_d_obj
-        print("Exit after %d updates, gap: %f" % (n_updates, gap))
+        print("Inner solver did not converge."
+              "Exit after %d updates, gap: %f" % (n_updates, gap))
 
     return X, R
 
@@ -705,8 +705,8 @@ def mixed_norm_solver_a5g(M, G, alpha, maxit=3000, tol=1e-8,
     if n_orient == 1:
         lc = np.sum(G ** 2, axis=0)
     else:
-        lc = np.empty(n_sources)
-        for g in range(n_sources):
+        lc = np.empty(n_positions)
+        for g in range(n_positions):
             G_g = G[:, n_orient * g: n_orient * (g + 1)]
             lc[g] = np.linalg.norm(
                 np.dot(G_g.T, G_g), ord=2)
@@ -731,19 +731,23 @@ def mixed_norm_solver_a5g(M, G, alpha, maxit=3000, tol=1e-8,
 
         ws_size = min(max(2 * active_pos.sum(), min_working_set_size),
                       n_positions)
-        ws_pos = np.argpartition(priorities, ws_size - 1)  # TODO double check argpartition
+        ws_pos = np.argpartition(priorities, ws_size - 1)[:ws_size]  # TODO double check argpartition
         ws_pos.sort()
         if n_orient == 1:
             ws_sources = ws_pos
         else:
             ws_sources = (n_orient * ws_pos[:, None] +
                           np.arange(n_orient)[None, :]).ravel()
+            # extra careful:
+            ws_sources.sort()
 
         tol_inner = inner_tol_ratio * gap
         # solve problem restricted to working set
-        print("Iteration %d, solving subproblem with %d positions" % (k, ws_size))
+        print("Iteration %d:" % k)
+        print("dgap %.2e" % gap)
+        print("solving subproblem with %d sources" % len(ws_sources))
         X_, R = _mixed_norm_solver_greedy_bcd(M, G[:, ws_sources], alpha,
-                                              lc[ws_sources],
+                                              lc[ws_pos],
                                               GtM[ws_sources],
                                               init=X[ws_sources],
                                               n_orient=n_orient,
