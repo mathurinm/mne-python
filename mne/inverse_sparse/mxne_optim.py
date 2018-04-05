@@ -1,6 +1,6 @@
 # Author: Alexandre Gramfort <alexandre.gramfort@inria.fr>
 #         Daniel Strohmeier <daniel.strohmeier@gmail.com>
-#
+#         Mathurin Massias <mathurin.massias@gmail.com>
 # License: Simplified BSD
 
 from math import sqrt
@@ -864,24 +864,27 @@ def norm_l1_tf(Z, phi, n_orient, w_time):
     return l1_norm
 
 
-def norm_epsilon(Y, l1_ratio, phi):
-    """Dual norm of (1. - l1_ratio) * L2 norm + l1_ratio * L1 norm, at Y.
+def norm_epsilon(Y, l1_ratio, phi, w_time=None):
+    """Dual norm of (1. - l1_ratio) * L2 norm + l1_ratio * L1 weighted norm.
 
     This is the unique solution in nu of
     norm(prox_l1(Y, nu * l1_ratio), ord=2) = (1. - l1_ratio) * nu.
 
     Warning: it takes into account the fact that Y only contains coefficients
-    corresponding to the positive frequencies (see `stft_norm2()`).
+    corresponding to the positive frequencies (see `stft_norm2()`). It is also
+    assumed that all entries of Y are positive.
 
     Parameters
     ----------
-    Y : array, shape (n_freqs * n_steps,)
+    Y : array, shape (n_coefs,)
         The input data.
     l1_ratio : float between 0 and 1
         Tradeoff between L2 and L1 regularization. When it is 0, no temporal
         regularization is applied.
     phi : instance of _Phi
         The TF operator.
+    w_time : array, shape (n_coefs, )
+        Weights of each TF coefficient. If None, weights equal to 1 are used.
 
     Returns
     -------
@@ -894,11 +897,12 @@ def norm_epsilon(Y, l1_ratio, phi):
        "GAP Safe Screening Rules for Sparse-Group Lasso", Advances in Neural
        Information Processing Systems (NIPS), 2016.
     """
+    # TODO add Burdakov
     # since the solution is invariant to flipped signs in Y, all entries
     # of Y are assumed positive
-    norm_inf_Y = np.max(Y)
+    norm_inf_Y = np.max(Y / w_time) if w_time is not None else np.max(Y)
     if l1_ratio == 1.:
-        # dual norm of L1 is Linf
+        # dual norm of L1 weighted is Linf with inverse weights
         return norm_inf_Y
     elif l1_ratio == 0.:
         # dual norm of L2 is L2
@@ -914,6 +918,7 @@ def norm_epsilon(Y, l1_ratio, phi):
         return norm_inf_Y
 
     # Add negative freqs: count all freqs twice except first and last:
+    # TODO change name of weights
     weights = np.empty(len(Y), dtype=int)
     weights.fill(2)
     for i, w in enumerate(np.array_split(weights,
@@ -921,32 +926,53 @@ def norm_epsilon(Y, l1_ratio, phi):
         w[:phi.n_steps[i]] = 1
         w[-phi.n_steps[i]:] = 1
 
-    # sort both Y and weights at the same time
-    idx_sort = np.argsort(Y[idx])[::-1]
+    # sort both Y / w_time and weights at the same time
+    if w_time is not None:
+        idx_sort = np.argsort(Y[idx] / w_time[idx])[::-1]
+        w_time = w_time[idx][idx_sort]
+    else:
+        idx_sort = np.argsort(Y[idx] / w_time[idx])[::-1]
+
     Y = Y[idx][idx_sort]
     weights = weights[idx][idx_sort]
 
-    Y = np.repeat(Y, weights)
+    if w_time is not None:
+        w_time = np.repeat(w_time, weights)
+
     K = Y.shape[0]
-    p_sum = np.cumsum(Y[:(K - 1)])
-    p_sum_2 = np.cumsum(Y[:(K - 1)] ** 2)
-    upper = p_sum_2 / Y[1:] ** 2 - 2. * p_sum / Y[1:] + np.arange(1, K)
+    if w_time is None:
+        p_sum_Y2 = np.cumsum(Y[:(K - 1)] ** 2)
+        p_sum_w2 = np.arange(K)
+        p_sum_Yw = np.cumsum(Y[:K - 1])
+        upper = (p_sum_Y2 / (Y[1:] / w_time[1:]) ** 2 -
+                 2. * p_sum_Yw / (Y[1:] / w_time[1:]) + p_sum_w2[1:])
+    else:
+        p_sum_Y2 = np.cumsum(Y[:(K - 1)] ** 2)
+        p_sum_w2 = np.cumsum(w_time[:(K - 1)] ** 2)
+        p_sum_Yw = np.cumsum(Y[:K - 1] * w_time[:K - 1])
+        upper = (p_sum_Y2 / (Y[1:] / w_time[1:]) ** 2 -
+                 2. * p_sum_Yw / (Y[1:] / w_time[1:]) + p_sum_w2[:1])
     in_lower_upper = np.where(upper > (1. - l1_ratio) ** 2 / l1_ratio ** 2)[0]
     if in_lower_upper.size > 0:
-        j = in_lower_upper[0] + 1
-        p_sum = p_sum[in_lower_upper[0]]
-        p_sum_2 = p_sum_2[in_lower_upper[0]]
+        # j = in_lower_upper[0] + 1
+        p_sum_Y2 = p_sum_Y2[in_lower_upper[0]]
+        p_sum_w2 = p_sum_w2[in_lower_upper[0]]
+        p_sum_Yw = p_sum_Yw[in_lower_upper[0]]
     else:
-        j = K
-        p_sum = p_sum[-1] + Y[K - 1]
-        p_sum_2 = p_sum_2[-1] + Y[K - 1] ** 2
+        p_sum_Y2 = p_sum_Y2[-1] + Y[K - 1] ** 2
+        if w_time is None:
+            p_sum_w2 = p_sum_w2[-1] + 1
+            p_sum_Yw = p_sum_Yw[-1] + Y[K - 1]
+        else:
+            p_sum_w2 = p_sum_w2[-1] + w_time[K - 1] ** 2
+            p_sum_Yw = p_sum_Yw[-1] + Y[K - 1] * w_time[K - 1]
 
-    denom = l1_ratio ** 2 * j - (1. - l1_ratio) ** 2
+    denom = l1_ratio ** 2 * p_sum_w2 - (1. - l1_ratio) ** 2
     if np.abs(denom) < 1e-10:
-        return p_sum_2 / (2. * l1_ratio * p_sum)
+        return p_sum_Y2 / (2. * l1_ratio * p_sum_Yw)
     else:
-        delta = (l1_ratio * p_sum) ** 2 - p_sum_2 * denom
-        return (l1_ratio * p_sum - np.sqrt(delta)) / denom
+        delta = (l1_ratio * p_sum_Yw) ** 2 - p_sum_Y2 * denom
+        return (l1_ratio * p_sum_Yw - np.sqrt(delta)) / denom
 
 
 def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient):
