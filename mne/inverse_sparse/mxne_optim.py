@@ -934,6 +934,7 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
     Y = Y[idx][idx_sort]
     weights = weights[idx][idx_sort]
 
+    Y = np.repeat(Y, weights)
     if w_time is not None:
         w_time = np.repeat(w_time, weights)
 
@@ -953,12 +954,12 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
     if in_lower_upper.size > 0:
         # j = in_lower_upper[0] + 1
         p_sum_Y2 = p_sum_Y2[in_lower_upper[0]]
-        p_sum_w2 = p_sum_w2[in_lower_upper[0]]
+        p_sum_w2 = in_lower_upper[0] + 1
         p_sum_Yw = p_sum_Yw[in_lower_upper[0]]
     else:
         p_sum_Y2 = p_sum_Y2[-1] + Y[K - 1] ** 2
         if w_time is None:
-            p_sum_w2 = p_sum_w2[-1] + 1
+            p_sum_w2 = K
             p_sum_Yw = p_sum_Yw[-1] + Y[K - 1]
         else:
             p_sum_w2 = p_sum_w2[-1] + w_time[K - 1] ** 2
@@ -1532,7 +1533,7 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
 
         if active_set.sum() > 0:
             l21_penalty = np.sum(g_space(Z.copy(), eps_act))
-            l1_penalty = phi.norm(g_time(Z.copy(), eps_act), ord=1)
+            l1_penalty = phi.norm(g_time(Z.copy(), eps_act), ord=1).sum()
 
             p_obj = (0.5 * linalg.norm(M - np.dot(G[:, active_set],  X),
                      'fro') ** 2. + alpha_space * l21_penalty +

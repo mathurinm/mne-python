@@ -291,9 +291,9 @@ def test_iterative_reweighted_mxne():
 
 def test_iterative_reweighted_tfmxne():
     M, G, active_set = _generate_tf_data()
-    alpha_space = 50.
+    alpha_space = 30.
     alpha_time = 0.5
     wsize, tstep = 32, 4
     X, active_set, E = iterative_tf_mixed_norm_solver(
         M, G, alpha_space, alpha_time, wsize=wsize, tstep=tstep,
-        n_tfmxne_iter=1)
+        n_tfmxne_iter=3)
