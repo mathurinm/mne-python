@@ -910,8 +910,12 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
         return 0.
 
     # get K largest values of Y:
-    idx = Y > l1_ratio * norm_inf_Y
+    if w_time is None:
+        idx = Y > l1_ratio * norm_inf_Y
+    else:
+        idx = (Y / w_time) > l1_ratio * norm_inf_Y
     K = idx.sum()
+
     if K == 1:
         return norm_inf_Y
 
@@ -989,6 +993,9 @@ def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_time=None):
         0 corresponds to an absence of temporal regularization, ie MxNE.
     n_orient : int
         Number of dipoles per location (typically 1 or 3).
+    w_time : array, shape (n_positions, n_coefs) (optional)
+        Weights for the L1 term of the epsilon norm. If None, weights are
+        all equal to 1.
 
     Returns
     -------
@@ -1005,7 +1012,8 @@ def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_time=None):
     nu = 0.
     for idx in range(n_positions):
         GTRPhi_ = GTRPhi[idx]
-        norm_eps = norm_epsilon(GTRPhi_, l1_ratio, phi, w_time=w_time)
+        w = w_time[idx] if w_time is not None else None
+        norm_eps = norm_epsilon(GTRPhi_, l1_ratio, phi, w_time=w)
         if norm_eps > nu:
             nu = norm_eps
 
@@ -1507,7 +1515,7 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
     active_set = np.ones(n_sources, dtype=np.bool)
     Z = np.zeros((n_sources, phi.n_coefs.sum()), dtype=np.complex)
 
-    eps_act = 0.0
+    eps_act = 1e-16
 
     for k in range(n_tfmxne_iter):
         active_set_0 = active_set.copy()
