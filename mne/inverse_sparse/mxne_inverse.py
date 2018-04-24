@@ -636,8 +636,8 @@ def tf_mixed_norm(evoked, forward, noise_cov,
     else:
         X, active_set, E = iterative_tf_mixed_norm_solver(
             M, gain, alpha_space, alpha_time, wsize=wsize, tstep=tstep,
-            maxit=maxit, tol=tol, verbose=verbose, n_orient=n_dip_per_pos,
-            dgap_freq=dgap_freq, debias=debias)
+            n_tfmxne_iter=n_tfmxne_iter, maxit=maxit, tol=tol, verbose=verbose,
+            n_orient=n_dip_per_pos, dgap_freq=dgap_freq, debias=debias)
 
     if active_set.sum() == 0:
         raise Exception("No active dipoles found. "

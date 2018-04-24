@@ -867,9 +867,6 @@ def norm_l1_tf(Z, phi, n_orient, w_time):
 def norm_epsilon(Y, l1_ratio, phi, w_time=None):
     """Dual norm of (1. - l1_ratio) * L2 norm + l1_ratio * L1 weighted norm.
 
-    This is the unique solution in nu of
-    norm(prox_l1(Y, nu * l1_ratio), ord=2) = (1. - l1_ratio) * nu.
-
     Warning: it takes into account the fact that Y only contains coefficients
     corresponding to the positive frequencies (see `stft_norm2()`). It is also
     assumed that all entries of Y are positive.
@@ -884,7 +881,8 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
     phi : instance of _Phi
         The TF operator.
     w_time : array, shape (n_coefs, )
-        Weights of each TF coefficient. If None, weights equal to 1 are used.
+        Weights of each TF coefficient in the L1 norm. If None, weights equal
+        to 1 are used.
 
     Returns
     -------
@@ -931,7 +929,7 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
         idx_sort = np.argsort(Y[idx] / w_time[idx])[::-1]
         w_time = w_time[idx][idx_sort]
     else:
-        idx_sort = np.argsort(Y[idx] / w_time[idx])[::-1]
+        idx_sort = np.argsort(Y[idx])[::-1]
 
     Y = Y[idx][idx_sort]
     weights = weights[idx][idx_sort]
@@ -944,8 +942,7 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
         p_sum_Y2 = np.cumsum(Y[:(K - 1)] ** 2)
         p_sum_w2 = np.arange(K)
         p_sum_Yw = np.cumsum(Y[:K - 1])
-        upper = (p_sum_Y2 / (Y[1:] / w_time[1:]) ** 2 -
-                 2. * p_sum_Yw / (Y[1:] / w_time[1:]) + p_sum_w2[1:])
+        upper = p_sum_Y2 / Y[1:] ** 2 - 2. * p_sum_Yw / Y[1:] + p_sum_w2[1:]
     else:
         p_sum_Y2 = np.cumsum(Y[:(K - 1)] ** 2)
         p_sum_w2 = np.cumsum(w_time[:(K - 1)] ** 2)
@@ -975,8 +972,8 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
         return (l1_ratio * p_sum_Yw - np.sqrt(delta)) / denom
 
 
-def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient):
-    """epsilon-inf norm of phi(np.dot(G.T, R)).
+def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_time=None):
+    """Weighted epsilon-inf norm of phi(np.dot(G.T, R)).
 
     Parameters
     ----------
@@ -1007,7 +1004,7 @@ def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient):
     nu = 0.
     for idx in range(n_positions):
         GTRPhi_ = GTRPhi[idx]
-        norm_eps = norm_epsilon(GTRPhi_, l1_ratio, phi)
+        norm_eps = norm_epsilon(GTRPhi_, l1_ratio, phi, w_time=w_time)
         if norm_eps > nu:
             nu = norm_eps
 
@@ -1082,9 +1079,8 @@ def dgap_l21l1(M, G, Z, active_set, alpha_space, alpha_time, phi, phiT,
     nR2 = sum_squared(R)
     p_obj = 0.5 * nR2 + alpha_space * penaltyl21 + alpha_time * penaltyl1
 
-    #### TODO weighting in the dual/epsilon norm
     l1_ratio = alpha_time / (alpha_space + alpha_time)
-    dual_norm = norm_epsilon_inf(G, R, phi, l1_ratio, n_orient)
+    dual_norm = norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_time=w_time)
     scaling = min(1., (alpha_space + alpha_time) / dual_norm)
 
     d_obj = (scaling - 0.5 * (scaling ** 2)) * nR2 + scaling * np.sum(R * GX)
