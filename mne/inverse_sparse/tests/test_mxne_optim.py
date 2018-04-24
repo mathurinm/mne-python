@@ -11,6 +11,7 @@ from numpy.testing import (assert_array_equal, assert_array_almost_equal,
 from mne.inverse_sparse.mxne_optim import (mixed_norm_solver,
                                            tf_mixed_norm_solver,
                                            iterative_mixed_norm_solver,
+                                           iterative_tf_mixed_norm_solver,
                                            norm_epsilon_inf, norm_epsilon,
                                            _Phi, _PhiT, dgap_l21l1)
 from mne.time_frequency._stft import stft_norm2
@@ -286,3 +287,13 @@ def test_iterative_reweighted_mxne():
             debias=True, n_orient=5, solver='cd')
     assert_array_equal(np.where(active_set)[0], [0, 1, 2, 3, 4])
     assert_array_equal(X_hat_bcd, X_hat_cd, 5)
+
+
+def test_iterative_reweighted_tfmxne():
+    M, G, active_set = _generate_tf_data()
+    alpha_space = 50.
+    alpha_time = 0.5
+    wsize, tstep = 32, 4
+    X, active_set, E = iterative_tf_mixed_norm_solver(
+        M, G, alpha_space, alpha_time, wsize=wsize, tstep=tstep,
+        n_tfmxne_iter=1)
