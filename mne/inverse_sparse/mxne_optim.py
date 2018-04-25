@@ -864,12 +864,19 @@ def norm_l1_tf(Z, phi, n_orient, w_time):
     return l1_norm
 
 
-def norm_epsilon(Y, l1_ratio, phi, w_time=None):
-    """Dual norm of (1. - l1_ratio) * L2 norm + l1_ratio * L1 weighted norm.
+def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
+    """Weighted epsilon norm.
+
+    The weighted epsilon norm is the dual norm of::
+
+    w_{space} * (1. - l1_ratio) * ||Y||_2 + l1_ratio * ||Y||_{1, w_{time}}.
+
+    where `||Y||_{1, w_{time}} = (np.abs(Y) * w_time).sum()`
 
     Warning: it takes into account the fact that Y only contains coefficients
-    corresponding to the positive frequencies (see `stft_norm2()`). It is also
-    assumed that all entries of Y are positive.
+    corresponding to the positive frequencies (see `stft_norm2()`): some
+    entries will be counted twice. It is also assumed that all entries of both
+    Y and w_time are non-negative.
 
     Parameters
     ----------
@@ -880,9 +887,12 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
         regularization is applied.
     phi : instance of _Phi
         The TF operator.
+    w_space : float
+        Scalar weight of the L2 norm. By default, it is taken equal to 1.
     w_time : array, shape (n_coefs, )
         Weights of each TF coefficient in the L1 norm. If None, weights equal
         to 1 are used.
+
 
     Returns
     -------
@@ -898,6 +908,9 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
     # TODO add Burdakov
     # since the solution is invariant to flipped signs in Y, all entries
     # of Y are assumed positive
+    # if w_space is not None:
+    #     w_time /= w_space
+
     norm_inf_Y = np.max(Y / w_time) if w_time is not None else np.max(Y)
     if l1_ratio == 1.:
         # dual norm of L1 weighted is Linf with inverse weights
@@ -913,22 +926,22 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
     if w_time is None:
         idx = Y > l1_ratio * norm_inf_Y
     else:
-        idx = (Y / w_time) > l1_ratio * norm_inf_Y
+        # TODO this is a temporary hack, I cannot find the condition
+        idx = np.arange(Y.shape[0])
     K = idx.sum()
 
     if K == 1:
         return norm_inf_Y
 
     # Add negative freqs: count all freqs twice except first and last:
-    # TODO change name of weights
-    weights = np.empty(len(Y), dtype=int)
-    weights.fill(2)
-    for i, w in enumerate(np.array_split(weights,
+    freqs_count = np.empty(len(Y), dtype=int)
+    freqs_count.fill(2)
+    for i, w in enumerate(np.array_split(freqs_count,
                                          np.cumsum(phi.n_coefs)[:-1])):
         w[:phi.n_steps[i]] = 1
         w[-phi.n_steps[i]:] = 1
 
-    # sort both Y / w_time and weights at the same time
+    # sort both Y / w_time and freqs_count at the same time
     if w_time is not None:
         idx_sort = np.argsort(Y[idx] / w_time[idx])[::-1]
         w_time = w_time[idx][idx_sort]
@@ -936,11 +949,11 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
         idx_sort = np.argsort(Y[idx])[::-1]
 
     Y = Y[idx][idx_sort]
-    weights = weights[idx][idx_sort]
+    freqs_count = freqs_count[idx][idx_sort]
 
-    Y = np.repeat(Y, weights)
+    Y = np.repeat(Y, freqs_count)
     if w_time is not None:
-        w_time = np.repeat(w_time, weights)
+        w_time = np.repeat(w_time, freqs_count)
 
     K = Y.shape[0]
     if w_time is None:
@@ -954,7 +967,7 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
         p_sum_Yw = np.cumsum(Y[:K - 1] * w_time[:K - 1])
         upper = (p_sum_Y2 / (Y[1:] / w_time[1:]) ** 2 -
                  2. * p_sum_Yw / (Y[1:] / w_time[1:]) + p_sum_w2[:1])
-    in_lower_upper = np.where(upper > (1. - l1_ratio) ** 2 / l1_ratio ** 2)[0]
+    in_lower_upper = np.where(upper > w_space ** 2 * (1. - l1_ratio) ** 2 / l1_ratio ** 2)[0]
     if in_lower_upper.size > 0:
         # j = in_lower_upper[0] + 1
         p_sum_Y2 = p_sum_Y2[in_lower_upper[0]]
@@ -977,7 +990,7 @@ def norm_epsilon(Y, l1_ratio, phi, w_time=None):
         return (l1_ratio * p_sum_Yw - np.sqrt(delta)) / denom
 
 
-def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_time=None):
+def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_space=None, w_time=None):
     """Weighted epsilon-inf norm of phi(np.dot(G.T, R)).
 
     Parameters
@@ -993,7 +1006,10 @@ def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_time=None):
         0 corresponds to an absence of temporal regularization, ie MxNE.
     n_orient : int
         Number of dipoles per location (typically 1 or 3).
-    w_time : array, shape (n_positions, n_coefs) (optional)
+    w_space : array, shape (n_positions,) or None.
+        Weights for the L2 term of the epsilon norm. If None, weights are
+        all equal to 1.
+    w_time : array, shape (n_positions, n_coefs) or None
         Weights for the L1 term of the epsilon norm. If None, weights are
         all equal to 1.
 
@@ -1078,13 +1094,18 @@ def dgap_l21l1(M, G, Z, active_set, alpha_space, alpha_time, phi, phiT,
     GX = np.dot(G[:, active_set], X)
     R = M - GX
 
+    # some functions need w_time only on active_set, other need it completely
     if w_time is not None:
-        w_time = w_time[active_set[::n_orient]]
+        w_time_as = w_time[active_set[::n_orient]]
+    else:
+        w_time_as = None
     if w_space is not None:
-        w_space = w_space[active_set[::n_orient]]
+        w_space_as = w_space[active_set[::n_orient]]
+    else:
+        w_space_as = None
 
-    penaltyl1 = norm_l1_tf(Z, phi, n_orient, w_time)
-    penaltyl21 = norm_l21_tf(Z, phi, n_orient, w_space)
+    penaltyl1 = norm_l1_tf(Z, phi, n_orient, w_time_as)
+    penaltyl21 = norm_l21_tf(Z, phi, n_orient, w_space_as)
     nR2 = sum_squared(R)
     p_obj = 0.5 * nR2 + alpha_space * penaltyl21 + alpha_time * penaltyl1
 
@@ -1265,11 +1286,16 @@ def _tf_mixed_norm_solver_bcd_active_set(M, G, alpha_space, alpha_time,
         if w_time is not None:
             w_time = w_time[active_set[::n_orient]]
 
+        if w_space is not None:
+            np.testing.assert_array_equal(G[:, active_set].shape[1], len(w_space))
+            np.testing.assert_array_equal(G[:, active_set].shape[1], len(w_time))
+            print(len(w_time))
         Z, as_, E_tmp, converged = _tf_mixed_norm_solver_bcd_(
             M, G[:, active_set], Z_init,
             np.ones(len(active) * n_orient, dtype=np.bool),
             candidates_, alpha_space, alpha_time,
             lipschitz_constant[active_set[::n_orient]], phi, phiT,
+            w_space=w_space, w_time=w_time,
             n_orient=n_orient, maxit=maxit, tol=tol,
             dgap_freq=dgap_freq, perc=0.5,
             verbose=verbose)
@@ -1540,12 +1566,18 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
         active_set[active_set] = active_set_
 
         if active_set.sum() > 0:
-            l21_penalty = np.sum(g_space(Z.copy(), eps_act))
-            l1_penalty = phi.norm(g_time(Z.copy(), eps_act), ord=1).sum()
+            l21_penalty = norm_l21_tf(Z.copy(), phi, n_orient, w_space)
+            l1_penalty = norm_l1_tf(Z.copy(), phi, n_orient, w_time)
+            # l21_penalty = np.sum(g_space(Z.copy(), eps_act))
+            # l1_penalty = phi.norm(g_time(Z.copy(), eps_act), ord=1).sum()
 
             p_obj = (0.5 * linalg.norm(M - np.dot(G[:, active_set],  X),
                      'fro') ** 2. + alpha_space * l21_penalty +
                      alpha_time * l1_penalty)
+
+            test = dgap_l21l1(M, G, Z, active_set, alpha_space, alpha_time, phi, phiT,
+                           n_orient, 0, w_space=w_space, w_time=w_time)
+            print("Mathurin, %f" % test[1])
 
             E.append(p_obj)
 
