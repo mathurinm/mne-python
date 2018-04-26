@@ -982,7 +982,7 @@ def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
             p_sum_w2 = p_sum_w2[-1] + w_time[K - 1] ** 2
             p_sum_Yw = p_sum_Yw[-1] + Y[K - 1] * w_time[K - 1]
 
-    denom = l1_ratio ** 2 * p_sum_w2 - (1. - l1_ratio) ** 2
+    denom = l1_ratio ** 2 * p_sum_w2 - w_space ** 2 * (1. - l1_ratio) ** 2
     if np.abs(denom) < 1e-10:
         return p_sum_Y2 / (2. * l1_ratio * p_sum_Yw)
     else:
@@ -1286,10 +1286,6 @@ def _tf_mixed_norm_solver_bcd_active_set(M, G, alpha_space, alpha_time,
         if w_time is not None:
             w_time = w_time[active_set[::n_orient]]
 
-        if w_space is not None:
-            np.testing.assert_array_equal(G[:, active_set].shape[1], len(w_space))
-            np.testing.assert_array_equal(G[:, active_set].shape[1], len(w_time))
-            print(len(w_time))
         Z, as_, E_tmp, converged = _tf_mixed_norm_solver_bcd_(
             M, G[:, active_set], Z_init,
             np.ones(len(active) * n_orient, dtype=np.bool),
