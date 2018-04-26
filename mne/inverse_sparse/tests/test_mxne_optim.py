@@ -140,8 +140,9 @@ def test_norm_epsilon():
     n_freqs = wsize // 2 + 1
     n_coefs = n_steps * n_freqs
     phi = _Phi(wsize, tstep, n_coefs)
+
     Y = np.zeros(n_steps * n_freqs)
-    l1_ratio = 0.5
+    l1_ratio = 0.03
     assert_allclose(norm_epsilon(Y, l1_ratio, phi), 0.)
 
     Y[0] = 2.
@@ -154,6 +155,20 @@ def test_norm_epsilon():
     l1_ratio = 0.
     assert_allclose(norm_epsilon(Y, l1_ratio, phi) ** 2,
                     stft_norm2(Y.reshape(-1, n_freqs[0], n_steps[0])))
+
+    # test that vanilla epsilon norm = weights equal to 1
+    w_time = np.ones(n_coefs[0])
+    Y = np.abs(np.random.randn(n_coefs[0]))
+    assert_allclose(norm_epsilon(Y, l1_ratio, phi),
+                    norm_epsilon(Y, l1_ratio, phi, w_time=w_time))
+
+    # scaling w_time and w_space by the same amount should divide
+    # epsilon norm by the same amount
+    mult = 1.970
+    w_time *= mult
+    assert_allclose(
+        norm_epsilon(Y, l1_ratio, phi),
+        norm_epsilon(Y, l1_ratio, phi, w_space=mult, w_time=w_time) / mult)
 
 
 @pytest.mark.timeout(60)  # ~30 sec on Travis OSX and Linux OpenBLAS

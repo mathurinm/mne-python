@@ -904,12 +904,13 @@ def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
     .. [1] E. Ndiaye, O. Fercoq, A. Gramfort, J. Salmon,
        "GAP Safe Screening Rules for Sparse-Group Lasso", Advances in Neural
        Information Processing Systems (NIPS), 2016.
+
+    .. [2] O. Burdakov, B. Merkulov,
+       "On a new norm for data fitting and optimization problems",
+       LiTH-MAT, 2001.
     """
-    # TODO add Burdakov
     # since the solution is invariant to flipped signs in Y, all entries
     # of Y are assumed positive
-    # if w_space is not None:
-    #     w_time /= w_space
 
     norm_inf_Y = np.max(Y / w_time) if w_time is not None else np.max(Y)
     if l1_ratio == 1.:
@@ -926,7 +927,7 @@ def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
     if w_time is None:
         idx = Y > l1_ratio * norm_inf_Y
     else:
-        # TODO this is a temporary hack, I cannot find the condition
+        # TODO this is a temporary hack, must implement better sol
         idx = np.arange(Y.shape[0])
     K = idx.sum()
 
@@ -958,20 +959,20 @@ def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
     K = Y.shape[0]
     if w_time is None:
         p_sum_Y2 = np.cumsum(Y[:(K - 1)] ** 2)
-        p_sum_w2 = np.arange(K)
+        p_sum_w2 = np.arange(1, K)
         p_sum_Yw = np.cumsum(Y[:K - 1])
-        upper = p_sum_Y2 / Y[1:] ** 2 - 2. * p_sum_Yw / Y[1:] + p_sum_w2[1:]
+        upper = p_sum_Y2 / Y[1:] ** 2 - 2. * p_sum_Yw / Y[1:] + p_sum_w2
     else:
         p_sum_Y2 = np.cumsum(Y[:(K - 1)] ** 2)
         p_sum_w2 = np.cumsum(w_time[:(K - 1)] ** 2)
         p_sum_Yw = np.cumsum(Y[:K - 1] * w_time[:K - 1])
         upper = (p_sum_Y2 / (Y[1:] / w_time[1:]) ** 2 -
-                 2. * p_sum_Yw / (Y[1:] / w_time[1:]) + p_sum_w2[:1])
+                 2. * p_sum_Yw / (Y[1:] / w_time[1:]) + p_sum_w2)
     in_lower_upper = np.where(upper > w_space ** 2 * (1. - l1_ratio) ** 2 / l1_ratio ** 2)[0]
     if in_lower_upper.size > 0:
         # j = in_lower_upper[0] + 1
         p_sum_Y2 = p_sum_Y2[in_lower_upper[0]]
-        p_sum_w2 = in_lower_upper[0] + 1
+        p_sum_w2 = p_sum_w2[in_lower_upper[0]]
         p_sum_Yw = p_sum_Yw[in_lower_upper[0]]
     else:
         p_sum_Y2 = p_sum_Y2[-1] + Y[K - 1] ** 2
