@@ -1528,12 +1528,12 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
     # space and time penalties, and inverse of their derivatives:
     g_space = lambda Z, eps: np.sqrt(np.sqrt(phi.norm(Z, ord=2).reshape(
         -1, n_orient).sum(axis=1)) + eps)
-    g_space_prime = lambda Z, eps: 0.5 / g_space(Z, eps)
+    g_space_prime_inv = lambda Z, eps: 2. *g_space(Z, eps)
 
     g_time = lambda Z, eps: np.sqrt(np.sqrt(np.sum((np.abs(Z) ** 2.).reshape(
         (n_orient, -1), order='F'), axis=0)).reshape((-1, Z.shape[1]),
         order='F') + eps)
-    g_time_prime = lambda Z, eps: 0.5 / g_time(Z, eps)
+    g_time_prime_inv = lambda Z, eps: 2 * g_time(Z, eps) 
 
     E = list()
 
@@ -1550,8 +1550,8 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
             w_space = None
             w_time = None
         else:
-            w_space = 1. / g_space_prime(Z, eps_act)
-            w_time = g_time_prime(Z, eps_act)
+            w_space = 1. / g_space_prime_inv(Z, eps_act)
+            w_time = g_time_prime_inv(Z, eps_act)
             w_time[w_time == 0.0] = -1.
             w_time = 1. / w_time
             w_time[w_time < 0.0] = 0.0
