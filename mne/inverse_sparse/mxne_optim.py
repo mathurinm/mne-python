@@ -1029,8 +1029,10 @@ def norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_space=None, w_time=None):
     nu = 0.
     for idx in range(n_positions):
         GTRPhi_ = GTRPhi[idx]
-        w = w_time[idx] if w_time is not None else None
-        norm_eps = norm_epsilon(GTRPhi_, l1_ratio, phi, w_time=w)
+        w_t = w_time[idx] if w_time is not None else None
+        w_s = w_space[idx] if w_space is not None else 1.
+        norm_eps = norm_epsilon(GTRPhi_, l1_ratio, phi, w_space=w_s,
+                                w_time=w_t)
         if norm_eps > nu:
             nu = norm_eps
 
@@ -1571,9 +1573,6 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
             p_obj = (0.5 * linalg.norm(M - np.dot(G[:, active_set],  X),
                      'fro') ** 2. + alpha_space * l21_penalty +
                      alpha_time * l1_penalty)
-
-            test = dgap_l21l1(M, G, Z, active_set, alpha_space, alpha_time, phi, phiT,
-                           n_orient, 0, w_space=w_space, w_time=w_time)
 
             E.append(p_obj)
 
