@@ -152,10 +152,11 @@ def test_norm_epsilon():
     assert_allclose(norm_epsilon(Y, l1_ratio, phi), np.max(Y))
     # dummy value without random:
     Y = np.arange(n_steps * n_freqs).reshape(-1, )
-    l1_ratio = 0.
+    l1_ratio = 0.0
     assert_allclose(norm_epsilon(Y, l1_ratio, phi) ** 2,
                     stft_norm2(Y.reshape(-1, n_freqs[0], n_steps[0])))
 
+    l1_ratio = 0.03
     # test that vanilla epsilon norm = weights equal to 1
     w_time = np.ones(n_coefs[0])
     Y = np.abs(np.random.randn(n_coefs[0]))
@@ -164,11 +165,13 @@ def test_norm_epsilon():
 
     # scaling w_time and w_space by the same amount should divide
     # epsilon norm by the same amount
-    mult = 1.970
-    w_time *= mult
+    Y = np.arange(n_coefs) + 1
+    mult = 2.
     assert_allclose(
-        norm_epsilon(Y, l1_ratio, phi),
-        norm_epsilon(Y, l1_ratio, phi, w_space=mult, w_time=w_time) / mult)
+        norm_epsilon(Y, l1_ratio, phi, w_space=1,
+                     w_time=np.ones(n_coefs)) / mult,
+        norm_epsilon(Y, l1_ratio, phi, w_space=mult,
+                     w_time=mult * np.ones(n_coefs)))
 
 
 @pytest.mark.timeout(60)  # ~30 sec on Travis OSX and Linux OpenBLAS

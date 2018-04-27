@@ -1565,8 +1565,16 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
         active_set[active_set] = active_set_
 
         if active_set.sum() > 0:
-            l21_penalty = norm_l21_tf(Z.copy(), phi, n_orient, w_space)
-            l1_penalty = norm_l1_tf(Z.copy(), phi, n_orient, w_time)
+            if w_space is not None:
+                w_space_as = w_space[active_set[::n_orient]]
+            else:
+                w_space_as = None
+            if w_time is not None:
+                w_time_as = w_time[active_set[::n_orient]]
+            else:
+                w_time_as = None
+            l21_penalty = norm_l21_tf(Z.copy(), phi, n_orient, w_space_as)
+            l1_penalty = norm_l1_tf(Z.copy(), phi, n_orient, w_time_as)
             # l21_penalty = np.sum(g_space(Z.copy(), eps_act))
             # l1_penalty = phi.norm(g_time(Z.copy(), eps_act), ord=1).sum()
 
