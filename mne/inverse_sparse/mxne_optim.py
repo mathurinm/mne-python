@@ -958,14 +958,14 @@ def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
 
     K = Y.shape[0]
     if w_time is None:
-        p_sum_Y2 = np.cumsum(Y[:(K - 1)] ** 2)
+        p_sum_Y2 = np.cumsum(Y[:-1] ** 2)
         p_sum_w2 = np.arange(1, K)
-        p_sum_Yw = np.cumsum(Y[:K - 1])
+        p_sum_Yw = np.cumsum(Y[:-1])
         upper = p_sum_Y2 / Y[1:] ** 2 - 2. * p_sum_Yw / Y[1:] + p_sum_w2
     else:
-        p_sum_Y2 = np.cumsum(Y[:(K - 1)] ** 2)
-        p_sum_w2 = np.cumsum(w_time[:(K - 1)] ** 2)
-        p_sum_Yw = np.cumsum(Y[:K - 1] * w_time[:K - 1])
+        p_sum_Y2 = np.cumsum(Y[:-1] ** 2)
+        p_sum_w2 = np.cumsum(w_time[:-1] ** 2)
+        p_sum_Yw = np.cumsum(Y[:-1] * w_time[:-1])
         upper = (p_sum_Y2 / (Y[1:] / w_time[1:]) ** 2 -
                  2. * p_sum_Yw / (Y[1:] / w_time[1:]) + p_sum_w2)
     in_lower_upper = np.where(upper > w_space ** 2 * (1. - l1_ratio) ** 2 / l1_ratio ** 2)[0]
@@ -1574,7 +1574,6 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
 
             test = dgap_l21l1(M, G, Z, active_set, alpha_space, alpha_time, phi, phiT,
                            n_orient, 0, w_space=w_space, w_time=w_time)
-            print("Mathurin, %f" % test[1])
 
             E.append(p_obj)
 
