@@ -1563,8 +1563,6 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
     active_set = np.ones(n_sources, dtype=np.bool)
     Z = np.zeros((n_sources, phi.n_coefs.sum()), dtype=np.complex)
 
-    eps_act = 0
-
     for k in range(n_tfmxne_iter):
         active_set_0 = active_set.copy()
         Z0 = Z.copy()
@@ -1573,8 +1571,8 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
             w_space = None
             w_time = None
         else:
-            w_space = 1. / g_space_prime_inv(Z, eps_act)
-            w_time = g_time_prime_inv(Z, eps_act)
+            w_space = 1. / g_space_prime_inv(Z)
+            w_time = g_time_prime_inv(Z)
             w_time[w_time == 0.0] = -1.
             w_time = 1. / w_time
             w_time[w_time < 0.0] = 0.0
@@ -1588,18 +1586,8 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
         active_set[active_set] = active_set_
 
         if active_set.sum() > 0:
-            # if w_space is not None:
-            #     w_space_as = w_space[active_set[::n_orient]]
-            # else:
-            #     w_space_as = None
-            # if w_time is not None:
-            #     w_time_as = w_time[active_set[::n_orient]]
-            # else:
-            #     w_time_as = None
-            # l21_penalty = norm_l21_tf(Z.copy(), phi, n_orient, w_space_as)
-            # l1_penalty = norm_l1_tf(Z.copy(), phi, n_orient, w_time_as)
-            l21_penalty = np.sum(g_space(Z.copy(), eps_act))
-            l1_penalty = phi.norm(g_time(Z.copy(), eps_act), ord=1).sum()
+            l21_penalty = np.sum(g_space(Z.copy()))
+            l1_penalty = phi.norm(g_time(Z.copy()), ord=1).sum()
 
             p_obj = (0.5 * linalg.norm(M - np.dot(G[:, active_set],  X),
                      'fro') ** 2. + alpha_space * l21_penalty +
