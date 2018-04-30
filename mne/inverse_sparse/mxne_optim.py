@@ -975,7 +975,8 @@ def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
         p_sum_Yw = np.cumsum(Y[:-1] * w_time[:-1])
         upper = (p_sum_Y2 / (Y[1:] / w_time[1:]) ** 2 -
                  2. * p_sum_Yw / (Y[1:] / w_time[1:]) + p_sum_w2)
-    in_lower_upper = np.where(upper > w_space ** 2 * (1. - l1_ratio) ** 2 / l1_ratio ** 2)[0]
+    in_lower_upper = np.where(upper > w_space ** 2 * (1. - l1_ratio) ** 2 /
+                              l1_ratio ** 2)[0]
     if in_lower_upper.size > 0:
         # j = in_lower_upper[0] + 1
         p_sum_Y2 = p_sum_Y2[in_lower_upper[0]]
@@ -1538,14 +1539,20 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
             lc[j] = linalg.norm(np.dot(G_tmp.T, G_tmp), ord=2)
 
     # space and time penalties, and inverse of their derivatives:
-    g_space = lambda Z, eps: np.sqrt(np.sqrt(phi.norm(Z, ord=2).reshape(
-        -1, n_orient).sum(axis=1)) + eps)
-    g_space_prime_inv = lambda Z, eps: 2. * g_space(Z, eps)
+    def g_space(Z):
+        return np.sqrt(np.sqrt(phi.norm(Z, ord=2).reshape(
+            -1, n_orient).sum(axis=1)))
 
-    g_time = lambda Z, eps: np.sqrt(np.sqrt(np.sum((np.abs(Z) ** 2.).reshape(
-        (n_orient, -1), order='F'), axis=0)).reshape((-1, Z.shape[1]),
-        order='F') + eps)
-    g_time_prime_inv = lambda Z, eps: 2 * g_time(Z, eps)
+    def g_space_prime_inv(Z):
+        return 2. * g_space(Z)
+
+    def g_time(Z):
+        return np.sqrt(np.sqrt(np.sum((np.abs(Z) ** 2.).reshape(
+            (n_orient, -1), order='F'), axis=0)).reshape(
+            (-1, Z.shape[1]), order='F'))
+
+    def g_time_prime_inv(Z):
+        return 2. * g_time(Z)
 
     E = list()
 
