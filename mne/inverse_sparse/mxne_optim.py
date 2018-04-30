@@ -1524,6 +1524,10 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
                          'passed. Got tstep = %s and wsize = %s' %
                          (tstep, wsize))
 
+    if len(tstep) > 1 and n_tfmxne_iter > 1:
+        raise NotImplementedError("Multidict is currently not supported "
+                                  "with irTF-MxNE")
+
     n_steps = np.ceil(n_times / tstep.astype(float)).astype(int)
     n_freqs = wsize // 2 + 1
     n_coefs = n_steps * n_freqs
