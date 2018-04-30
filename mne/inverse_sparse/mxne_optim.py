@@ -912,6 +912,21 @@ def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
     # since the solution is invariant to flipped signs in Y, all entries
     # of Y are assumed positive
 
+    # Add negative freqs: count all freqs twice except first and last:
+    freqs_count = np.empty(len(Y), dtype=int)
+    freqs_count.fill(2)
+    for i, w in enumerate(np.array_split(freqs_count,
+                                         np.cumsum(phi.n_coefs)[:-1])):
+        w[:phi.n_steps[i]] = 1
+        w[-phi.n_steps[i]:] = 1
+
+    # exclude 0 weights:
+    if w_time is not None:
+        nonzero_weights = (w_time != 0.0)
+        Y = Y[nonzero_weights]
+        freqs_count = freqs_count[nonzero_weights]
+        w_time = w_time[nonzero_weights]
+
     norm_inf_Y = np.max(Y / w_time) if w_time is not None else np.max(Y)
     if l1_ratio == 1.:
         # dual norm of L1 weighted is Linf with inverse weights
@@ -933,14 +948,6 @@ def norm_epsilon(Y, l1_ratio, phi, w_space=1., w_time=None):
 
     if K == 1:
         return norm_inf_Y
-
-    # Add negative freqs: count all freqs twice except first and last:
-    freqs_count = np.empty(len(Y), dtype=int)
-    freqs_count.fill(2)
-    for i, w in enumerate(np.array_split(freqs_count,
-                                         np.cumsum(phi.n_coefs)[:-1])):
-        w[:phi.n_steps[i]] = 1
-        w[-phi.n_steps[i]:] = 1
 
     # sort both Y / w_time and freqs_count at the same time
     if w_time is not None:
@@ -1113,7 +1120,8 @@ def dgap_l21l1(M, G, Z, active_set, alpha_space, alpha_time, phi, phiT,
     p_obj = 0.5 * nR2 + alpha_space * penaltyl21 + alpha_time * penaltyl1
 
     l1_ratio = alpha_time / (alpha_space + alpha_time)
-    dual_norm = norm_epsilon_inf(G, R, phi, l1_ratio, n_orient, w_time=w_time)
+    dual_norm = norm_epsilon_inf(G, R, phi, l1_ratio, n_orient,
+                                 w_space=w_space, w_time=w_time)
     scaling = min(1., (alpha_space + alpha_time) / dual_norm)
 
     d_obj = (scaling - 0.5 * (scaling ** 2)) * nR2 + scaling * np.sum(R * GX)
@@ -1451,7 +1459,7 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
                                    n_tfmxne_iter, wsize=64, tstep=4,
                                    maxit=3000, tol=1e-8, debias=True,
                                    n_orient=1, dgap_freq=10, verbose=None):
-    """Solve TF L0.5/L1 + L1 inverse problem with BCD and active set approach.
+    """Solve TF L0.5/L1 + L0.5 inverse problem with BCD + active set approach.
 
     Parameters
     ----------
@@ -1532,7 +1540,7 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
     # space and time penalties, and inverse of their derivatives:
     g_space = lambda Z, eps: np.sqrt(np.sqrt(phi.norm(Z, ord=2).reshape(
         -1, n_orient).sum(axis=1)) + eps)
-    g_space_prime_inv = lambda Z, eps: 2. *g_space(Z, eps)
+    g_space_prime_inv = lambda Z, eps: 2. * g_space(Z, eps)
 
     g_time = lambda Z, eps: np.sqrt(np.sqrt(np.sum((np.abs(Z) ** 2.).reshape(
         (n_orient, -1), order='F'), axis=0)).reshape((-1, Z.shape[1]),
@@ -1544,7 +1552,7 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
     active_set = np.ones(n_sources, dtype=np.bool)
     Z = np.zeros((n_sources, phi.n_coefs.sum()), dtype=np.complex)
 
-    eps_act = 1e-16
+    eps_act = 0
 
     for k in range(n_tfmxne_iter):
         active_set_0 = active_set.copy()
@@ -1585,7 +1593,6 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
             p_obj = (0.5 * linalg.norm(M - np.dot(G[:, active_set],  X),
                      'fro') ** 2. + alpha_space * l21_penalty +
                      alpha_time * l1_penalty)
-
             E.append(p_obj)
 
             logger.info('Iteration %d: active set size=%d, E=%f' % (
