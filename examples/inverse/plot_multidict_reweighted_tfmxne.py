@@ -15,11 +15,11 @@ based on the TF-MxNE solver, which promotes focal (sparse) sources.
 
 References
 ----------
-.. [1] D. Strohmeier, Y. Bekhti, J. Haueisen, A. Gramfort
-   "The iterative reweighted Mixed-Norm Estimate for spatio-temporal MEG/EEG
-   source reconstruction",
-   IEEE transactions on medical imaging, 35(10), 2218-2228.
-   DOI: 10.1109/TMI.2016.2553445
+.. [1] D. Strohmeier, A. Gramfort, J. Haueisen
+   "MEG/EEG Source Imaging with a Non-Convex Penalty in the Time-Frequency
+   Domain", 5th International Workshop on Pattern Recognition in
+   Neuroimaging (PRNI), 2015
+   DOI: 10.1109/PRNI.2015.14
 """
 # Author: Mathurin Massias <mathurin.massias@gmail.com>
 #
@@ -48,7 +48,7 @@ condition = 'Unknown'
 # Read evoked
 raw = mne.io.read_raw_fif(raw_fname)
 events = mne.find_events(raw, stim_channel='STI 014')
-reject = dict(grad=4000e-13, eog=150e-6)
+reject = dict(grad=4000e-13, eog=350e-6)
 picks = mne.pick_types(raw.info, meg=True, eog=True)
 
 event_id, tmin, tmax = 1, -1., 3.
@@ -85,9 +85,9 @@ dipoles, residual = tf_mixed_norm(
 
 # Crop to remove edges
 for dip in dipoles:
-    dip.crop(tmin=0., tmax=0.3)
-evoked.crop(tmin=0., tmax=0.3)
-residual.crop(tmin=0., tmax=0.3)
+    dip.crop(tmin=-0.05, tmax=0.3)
+evoked.crop(tmin=-0.05, tmax=0.3)
+residual.crop(tmin=-0.05, tmax=0.3)
 
 
 ###############################################################################
