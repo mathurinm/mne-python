@@ -308,11 +308,28 @@ def test_iterative_reweighted_mxne():
 
 
 def test_iterative_reweighted_tfmxne():
-    M, G, active_set = _generate_tf_data()
-    alpha_space = 30.
+    M, G, true_active_set = _generate_tf_data()
+    alpha_space = 38.
     alpha_time = 0.5
     tstep, wsize = [4, 2], [64, 16]
 
-    X, active_set, E = iterative_tf_mixed_norm_solver(
-        M, G, alpha_space, alpha_time, wsize=wsize, tstep=tstep,
-        n_tfmxne_iter=3, maxit=300)
+    X_hat_tf, _, _ = tf_mixed_norm_solver(
+        M, G, alpha_space, alpha_time, maxit=1000, tol=1e-4, wsize=wsize,
+        tstep=tstep, verbose=False, n_orient=1, debias=False)
+    X_hat_bcd, active_set, _ = iterative_tf_mixed_norm_solver(
+        M, G, alpha_space, alpha_time, 1, wsize=wsize, tstep=tstep,
+        maxit=1000, tol=1e-4, debias=False, verbose=False)
+    assert_allclose(X_hat_tf, X_hat_bcd, rtol=1e-3)
+    assert_array_equal(np.where(active_set)[0], true_active_set)
+
+    alpha_space = 50.
+    X_hat_bcd, active_set, _ = iterative_tf_mixed_norm_solver(
+        M, G, alpha_space, alpha_time, 3, wsize=wsize, tstep=tstep,
+        n_orient=5, maxit=1000, tol=1e-4, debias=False, verbose=False)
+    assert_array_equal(np.where(active_set)[0], [0, 1, 2, 3, 4])
+
+    alpha_space = 40.
+    X_hat_bcd, active_set, _ = iterative_tf_mixed_norm_solver(
+        M, G, alpha_space, alpha_time, 2, wsize=wsize, tstep=tstep,
+        n_orient=2, maxit=1000, tol=1e-4, debias=False, verbose=False)
+    assert_array_equal(np.where(active_set)[0], [0, 1, 4, 5])
