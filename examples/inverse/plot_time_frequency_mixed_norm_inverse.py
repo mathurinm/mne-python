@@ -98,7 +98,7 @@ evoked.crop(tmin=-0.05, tmax=0.3)
 residual.crop(tmin=-0.05, tmax=0.3)
 
 ###############################################################################
-# Plot dipole activations for TF-MxNE
+# Plot dipole activations
 plot_dipole_amplitudes(dipoles)
 
 # Plot dipole location of the strongest dipole with MRI slices
@@ -141,28 +141,3 @@ brain = stc.plot('sample', 'inflated', 'rh', views='medial',
                  subjects_dir=subjects_dir, initial_time=150, time_unit='ms')
 brain.add_label("V1", color="yellow", scalar_thresh=.5, borders=True)
 brain.add_label("V2", color="red", scalar_thresh=.5, borders=True)
-
-###############################################################################
-# Compute iterative reweighted TF-MxNE inverse solution
-n_tfmxne_iter = 5
-alpha = 40.  # general regularization parameter
-# l1_ratio parameter between 0 and 1 promotes temporal smoothness
-# (0 means no temporal regularization)
-l1_ratio = 0.01  # temporal regularization parameter
-
-dipoles, residual = tf_mixed_norm(
-    evoked, forward, cov, alpha=alpha, l1_ratio=l1_ratio,
-    n_tfmxne_iter=n_tfmxne_iter, loose=loose,
-    depth=depth, maxit=200, tol=1e-6, weights=stc_dspm, weights_min=8.,
-    debias=True, wsize=16, tstep=4, window=0.05, return_as_dipoles=True,
-    return_residual=True)
-
-# Crop to remove edges
-for dip in dipoles:
-    dip.crop(tmin=-0.05, tmax=0.3)
-evoked.crop(tmin=-0.05, tmax=0.3)
-residual.crop(tmin=-0.05, tmax=0.3)
-
-###############################################################################
-# Plot dipole activations for iterative reweighted TF-MxNE
-plot_dipole_amplitudes(dipoles)
