@@ -55,9 +55,9 @@ event_id, tmin, tmax = 1, -1., 3.
 baseline = (None, 0)
 epochs = mne.Epochs(raw, events, event_id, tmin, tmax, picks=picks,
                     baseline=baseline, reject=reject, preload=True)
-evoked = epochs.average()
+evoked = epochs.average().resample(sfreq=1000)
 evoked = evoked.pick_types(meg=True)
-evoked.crop(tmin=-0.05, tmax=0.35)
+evoked.crop(tmin=0.008, tmax=0.2)
 
 # Compute noise covariance matrix
 cov = mne.compute_covariance(epochs, tmax=0.)
@@ -68,13 +68,13 @@ forward = mne.read_forward_solution(fwd_fname)
 ###############################################################################
 # Run iterative reweighted multidict TFMxNE solvers
 
-alpha, l1_ratio = 35, 0.002
-loose, depth = 0.2, 0.9
+alpha, l1_ratio = 29.5, 0.05
+loose, depth = 1, 0.9
 # Use a multiscale time-frequency dictionary
 wsize, tstep = [16, 64], [2, 4]
 
 
-n_tfmxne_iter = 5
+n_tfmxne_iter = 10
 # Compute TF-MxNE inverse solution with dipole output
 dipoles, residual = tf_mixed_norm(
     evoked, forward, cov, alpha=alpha, l1_ratio=l1_ratio,
