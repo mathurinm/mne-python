@@ -329,7 +329,7 @@ def _plot_evoked(evoked, picks, exclude, unit, show, ylim, proj, xlim, hline,
                     times, bad_ch_idx, titles, ch_types_used, selectable,
                     False, line_alpha=1., nave=evoked.nave,
                     time_unit=time_unit)
-        plt.setp(axes, xlabel='Time (%s)' % time_unit)
+        # plt.setp(axes, xlabel='Time (%s)' % time_unit)
 
     elif plot_type == 'image':
         for ai, (ax, this_type) in enumerate(zip(axes, ch_types_used)):
@@ -354,7 +354,7 @@ def _plot_evoked(evoked, picks, exclude, unit, show, ylim, proj, xlim, hline,
     fig.canvas.draw()  # for axes plots update axes.
     if set_tight_layout:
         tight_layout(fig=fig)
-    plt_show(show)
+    plt_show(show, block=False)
     return fig
 
 
@@ -493,8 +493,8 @@ def _plot_lines(data, info, picks, fig, axes, spatial_colors, unit, units,
                 ax.set_xlim(xlim)
             if ylim is not None and this_type in ylim:
                 ax.set_ylim(ylim[this_type])
-            ax.set(title=r'%s (%d channel%s)'
-                   % (titles[this_type], len(D), _pl(len(D))))
+            # ax.set(title=r'%s (%d channel%s)'
+            #        % (titles[this_type], len(D), _pl(len(D))))
             if ai == 0:
                 _add_nave(ax, nave)
             if hline is not None:
@@ -523,11 +523,12 @@ def _plot_lines(data, info, picks, fig, axes, spatial_colors, unit, units,
 
 def _add_nave(ax, nave):
     """Add nave to axes."""
-    if nave is not None:
-        ax.annotate(
-            r'N$_{\mathrm{ave}}$=%d' % nave, ha='left', va='bottom',
-            xy=(0, 1), xycoords='axes fraction',
-            xytext=(0, 5), textcoords='offset pixels')
+    pass
+    # if nave is not None:
+    #     ax.annotate(
+    #         r'N$_{\mathrm{ave}}$=%d' % nave, ha='left', va='bottom',
+    #         xy=(0, 1), xycoords='axes fraction',
+    #         xytext=(0, 5), textcoords='offset pixels')
 
 
 def _handle_spatial_colors(colors, info, idx, ch_type, psd, ax):
