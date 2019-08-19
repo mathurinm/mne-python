@@ -141,7 +141,7 @@ def plot_cov(cov, info, exclude=[], colorbar=True, proj=False, show_svd=True,
                            xlabel='Eigenvalue index', title=name)
         tight_layout(fig=fig_svd)
 
-    plt_show(show)
+    plt_show(show, block=False)
 
     return fig_cov, fig_svd
 
