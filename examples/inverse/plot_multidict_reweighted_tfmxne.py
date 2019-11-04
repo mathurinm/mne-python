@@ -25,7 +25,7 @@ References
 #
 # License: BSD (3-clause)
 
-from os.path import join as pjoin
+from os.path import join as pjoin  # TODO is this the standard import in mne?
 
 import mne
 from mne.datasets import somato
@@ -39,9 +39,12 @@ print(__doc__)
 # Load somatosensory MEG data
 
 data_path = somato.data_path()
-subjects_dir = pjoin(data_path, 'subjects')
-raw_fname = pjoin(data_path, 'MEG', 'somato', 'sef_raw_sss.fif')
-fwd_fname = pjoin(data_path, 'MEG', 'somato', 'somato-meg-oct-6-fwd.fif')
+subject = '01'
+task = 'somato'
+raw_fname = pjoin(data_path, 'sub-{}'.format(subject), 'meg',
+                  'sub-{}_task-{}_meg.fif'.format(subject, task))
+fwd_fname = pjoin(data_path, 'derivatives', 'sub-{}'.format(subject),
+                  'sub-{}_task-{}-fwd.fif'.format(subject, task))
 
 condition = 'Unknown'
 
