@@ -606,14 +606,6 @@ def tf_mixed_norm(evoked, forward, noise_cov,
         forward, evoked.info, noise_cov, pca, depth, loose, rank,
         weights, weights_min)
 
-    # MM: TODO: is the following still needed with the above line?
-    loose, forward = _check_loose_forward(loose, forward)
-
-    # put the forward solution in fixed orientation if it's not already
-    if loose == 0. and not is_fixed_orient(forward):
-        forward = convert_forward_solution(
-            forward, surf_ori=True, force_fixed=True, copy=True, use_cps=True)
-
     n_dip_per_pos = 1 if is_fixed_orient(forward) else 3
 
     if window is not None:
