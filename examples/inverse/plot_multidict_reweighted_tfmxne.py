@@ -69,7 +69,7 @@ cov = mne.compute_covariance(epochs, rank='info', tmax=0.)
 forward = mne.read_forward_solution(fwd_fname)
 
 ###############################################################################
-# Run iterative reweighted multidict TFMxNE solvers
+# Run iterative reweighted multidict TFMxNE solver
 
 alpha, l1_ratio = 29.5, 0.05
 loose, depth = 1, 0.9
@@ -79,10 +79,11 @@ wsize, tstep = [16, 64], [2, 4]
 
 n_tfmxne_iter = 10
 # Compute TF-MxNE inverse solution with dipole output
+tol = 1e-1  # TODO change tol when scaling tol PR is merged
 dipoles, residual = tf_mixed_norm(
     evoked, forward, cov, alpha=alpha, l1_ratio=l1_ratio,
     n_tfmxne_iter=n_tfmxne_iter, loose=loose,
-    depth=depth,
+    depth=depth, tol=tol,
     wsize=wsize, tstep=tstep, return_as_dipoles=True,
     return_residual=True)
 
