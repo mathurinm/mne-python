@@ -63,7 +63,7 @@ evoked = evoked.pick_types(meg=True)
 evoked.crop(tmin=0.008, tmax=0.2)
 
 # Compute noise covariance matrix
-cov = mne.compute_covariance(epochs, tmax=0.)
+cov = mne.compute_covariance(epochs, rank='auto', tmax=0.)
 
 # Handling forward solution
 forward = mne.read_forward_solution(fwd_fname)
