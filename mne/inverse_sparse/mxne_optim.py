@@ -1585,7 +1585,7 @@ def iterative_tf_mixed_norm_solver(M, G, alpha_space, alpha_time,
             l21_penalty = np.sum(g_space(Z.copy()))
             l1_penalty = phi.norm(g_time(Z.copy()), ord=1).sum()
 
-            p_obj = (0.5 * linalg.norm(M - np.dot(G[:, active_set],  X),
+            p_obj = (0.5 * linalg.norm(M - np.dot(G[:, active_set], X),
                      'fro') ** 2. + alpha_space * l21_penalty +
                      alpha_time * l1_penalty)
             E.append(p_obj)
