@@ -62,6 +62,8 @@ Changelog
 
 - Allow returning vector source estimates from sparse inverse solvers through ``pick_ori='vector'`` by `Christian Brodbeck`_
 
+- Add possibility for :func:`mne.inverse_sparse.tf_mixed_norm` to treat L0.5 type penalties with iterative reweighted solvers.
+
 Bug
 ~~~
 
