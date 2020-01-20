@@ -129,8 +129,9 @@ def plot_cov(cov, info, exclude=(), colorbar=True, proj=False, show_svd=True,
             logger.info('    The projection vectors do not apply to these '
                         'channels.')
 
-    fig_cov, axes = plt.subplots(1, len(idx_names), squeeze=False,
-                                 figsize=(3.8 * len(idx_names), 3.7))
+    fig_cov, axes = plt.subplots(len(idx_names), 1, squeeze=False,
+                                 figsize=(3.7, 3.8 * len(idx_names),))
+    axes = axes.T
     for k, (idx, name, _, _, _) in enumerate(idx_names):
         vlim = np.max(np.abs(C[idx][:, idx]))
         im = axes[0, k].imshow(C[idx][:, idx], interpolation="nearest",
